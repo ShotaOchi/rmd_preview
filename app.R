@@ -2,8 +2,7 @@ library(rmarkdown)
 library(shiny)
 library(callr)
 
-if (interactive())
-{
+if (interactive()) {
   labels_button <- c("Render", "Cancel")
   flag_render <- reactiveValues(flag = FALSE)
   flag_render_finish <- reactiveValues(flag = FALSE)
@@ -11,8 +10,7 @@ if (interactive())
   flag_download <- reactiveValues(flag = TRUE)
   wd <- getwd()
   tmpdir <- gsub("\\\\", "", tempfile(pattern = "/tmp_",tmpdir = wd))
-  if (!dir.exists(tmpdir))
-  {
+  if (!dir.exists(tmpdir)) {
     dir.create(tmpdir)
   }
   tmpfile_rmd <- paste(tmpdir, "/tmp.Rmd", sep = "")
@@ -64,8 +62,7 @@ text
     )
   )
   
-  server <- function(input, output, session)
-  {
+  server <- function(input, output, session) {
     session$onSessionEnded(function() {
       unlink(tmpdir, recursive = TRUE)
       rs$close()
@@ -105,9 +102,9 @@ text
         if (tmpvalue_rs$result[[1]] == "SUCCESS") {
           flag_render_finish$flag <- !flag_render_finish$flag
         } else if (tmpvalue_rs$result[[1]] == "WARNING") {
-          showModal(modalDialog(title = "WARNING", as.character(tmpvalue_rs$result[[2]]), footer = modalButton("Close"), easyClose = TRUE))
+          showModal(modalDialog(title = "WARNING", renderText(as.character(tmpvalue_rs$result[[2]])), footer = modalButton("Close"), easyClose = TRUE))
         } else {
-          showModal(modalDialog(title = "ERROR", as.character(tmpvalue_rs$result[[2]]), footer = modalButton("Close"), easyClose = TRUE))
+          showModal(modalDialog(title = "ERROR", renderText(as.character(tmpvalue_rs$result[[2]])), footer = modalButton("Close"), easyClose = TRUE))
         }
       }
     })
@@ -119,27 +116,42 @@ text
       }
     })
     
-    
     observeEvent(input$save_button, {
       showModal(modalDialog(
         title = "Enter output filename and output directory",
+        selectInput("select_output_format", "output format:", list("html", "Rmd"), selected = "html"),
         textInput("output_filename", "output filename", value = "output.html"),
         downloadButton("save_button2", "Save"),
         footer = modalButton("Close"), easyClose = TRUE
       ))
+    })
+    observeEvent(input$select_output_format, {
+      newfilename <- strsplit(input$output_filename, ".", fixed = TRUE)[[1]]
+      if (input$select_output_format == "html") {
+        if (newfilename[length(newfilename)] == "Rmd") {
+          newfilename[length(newfilename)] <- "html"
+        }
+      } else {
+        if (newfilename[length(newfilename)] == "html") {
+          newfilename[length(newfilename)] <- "Rmd"
+        }
+      }
+      newfilename <- paste(newfilename, collapse = ".")
+      updateTextInput(session, "output_filename", value = newfilename)
     })
     output$save_button2 <- downloadHandler(
       filename = function() {
         input$output_filename
       },
       content = function(file) {
-        file.copy(tmpfile_output, file)
+        if (input$select_output_format == "html") {
+          file.copy(tmpfile_output, file)
+        } else {
+          write.table(input$text_rmarkdown, file, quote = FALSE, row.names = FALSE, col.names = FALSE)
+        }
         flag_download$flag <- !flag_download$flag
       }
     )
-    observeEvent(flag_download$flag, {
-      removeModal(session)
-    })
   }
   
   shinyApp(ui = ui, server = server)
